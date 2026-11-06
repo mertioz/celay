@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex Markdown</title>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; background: #f6f7f9; color: #18202b; font: 16px/1.45 system-ui, sans-serif }
+  main { max-width: 780px; margin: 0 auto; padding: 40px 22px }
+  header { display: flex; justify-content: space-between; align-items: start; gap: 16px }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -.035em }
+  p { color: #4f5b6b; margin: .5rem 0 1rem }
+  button, input { font: inherit; color: inherit; border: 1px solid #c6cdd6; border-radius: 7px; background: white }
+  button { padding: 6px 12px; cursor: pointer }
+  input { display: block; width: 100%; padding: 9px 12px }
+  :focus-visible { outline: 2px solid #3158d4; outline-offset: 2px }
+  #count { margin: 9px 0 6px; font-size: .84rem }
+  ul { list-style: none; margin: 0; padding: 0; border: 1px solid #c6cdd6; border-radius: 8px; background: white }
+  li + li { border-top: 1px solid #e8ebf0 }
+  li a { padding: 11px 13px; text-decoration: none; color: inherit; display: flex; gap: 12px; align-items: center }
+  li a:hover { background: #edf2ff }
+  li a:focus-visible { outline-offset: -2px }
+  .title { flex: 1; min-width: 0; overflow-wrap: anywhere }
+  small { color: #596575 }
+  .error { padding: 14px; background: #fff; border: 1px solid #c6cdd6; border-radius: 8px }
+</style>
+<main>
+  <header>
+    <h1>Discussions Codex</h1>
+    <form method="post" action="close"><button type="submit">Fermer</button></form>
+  </header>
+  <p>Cliquez sur un titre pour télécharger la discussion en Markdown.</p>
+  {{if .Error}}
+    <p class="error" role="alert">{{.Error}}</p>
+  {{else if .Discussions}}
+    <input type="search" id="filter" placeholder="Filtrer par titre…" aria-label="Filtrer par titre">
+    <p id="count" aria-live="polite"></p>
+    <ul id="titles">
+      {{range .Discussions}}
+        <li><a href="export/{{.ID}}" download><span class="title">{{.Title}}</span>{{if .Archived}}<small>Archivée</small>{{end}}</a></li>
+      {{end}}
+    </ul>
+  {{else}}
+    <p>Aucune discussion enregistrée.</p>
+  {{end}}
+</main>
+<script>
+  const filter = document.querySelector('#filter');
+  if (filter) {
+    const list = document.querySelector('#titles');
+    const count = document.querySelector('#count');
+    const normalize = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr');
+    const rows = Array.from(list.children, element => ({
+      element, title: normalize(element.querySelector('.title').textContent),
+    }));
+    const update = () => {
+      const query = normalize(filter.value.trim());
+      let matches = 0;
+      for (const {element, title} of rows) {
+        element.hidden = !title.includes(query);
+        if (!element.hidden) matches++;
+      }
+      list.hidden = matches === 0;
+      count.textContent = matches ? matches + (matches === 1 ? ' discussion' : ' discussions') : 'Aucun titre trouvé.';
+    };
+    filter.addEventListener('input', update);
+    update();
+  }
+  setInterval(() => fetch('alive', {method: 'POST'}).catch(() => {}), 30000);
+</script>
+</html>
