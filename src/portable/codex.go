@@ -24,6 +24,9 @@ func locateCodex(ctx context.Context) (string, error) {
 		}
 		return "", errors.New("CELAY_CODEX doit indiquer le chemin absolu d’un exécutable Codex.")
 	}
+	if path := packagedCodex(ctx); path != "" && isCodexExecutable(path) {
+		return path, nil
+	}
 	program := "codex"
 	if runtime.GOOS == "windows" {
 		program = "codex.exe"
@@ -46,10 +49,7 @@ func locateCodex(ctx context.Context) (string, error) {
 			}
 		}
 	case "darwin":
-		candidates = append(candidates,
-			"/Applications/Codex.app/Contents/Resources/codex",
-			filepath.Join(home, "Applications", "Codex.app", "Contents", "Resources", "codex"),
-			"/opt/homebrew/bin/codex", "/usr/local/bin/codex")
+		candidates = append(candidates, "/opt/homebrew/bin/codex", "/usr/local/bin/codex")
 	default:
 		candidates = append(candidates, "/usr/local/bin/codex", "/usr/bin/codex")
 	}
@@ -60,9 +60,6 @@ func locateCodex(ctx context.Context) (string, error) {
 		if isCodexExecutable(path) {
 			return path, nil
 		}
-	}
-	if path := packagedCodex(ctx); path != "" && isCodexExecutable(path) {
-		return path, nil
 	}
 	return "", errCodexMissing
 }
@@ -293,9 +290,10 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 		return delivery{state: "failed", detail: "Connexion à Codex interrompue."}
 	}
 	var resumed struct {
-		Thread struct {
-			ID     string
-			Status struct{ Type string }
+		Model, ModelProvider string
+		Thread               struct {
+			ID, ModelProvider string
+			Status            struct{ Type string }
 		}
 	}
 	err = client.call(preflight, "thread/resume",
@@ -312,13 +310,28 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 	if resumed.Thread.Status.Type == "active" {
 		return busyDelivery()
 	}
+	provider := resumed.ModelProvider
+	if provider == "" {
+		provider = resumed.Thread.ModelProvider
+	}
+	model, err := resolveTurnModel(preflight, client.call, provider, resumed.Model)
+	if err != nil {
+		return delivery{state: "failed", detail: err.Error()}
+	}
 	cancel()
 	start, stop := context.WithTimeout(ctx, 60*time.Second)
 	var started struct{ Turn codexTurn }
-	err = client.call(start, "turn/start", map[string]any{
+	params := map[string]any{
 		"threadId": item.ThreadID,
 		"input":    []map[string]string{{"type": "text", "text": item.Prompt}},
-	}, &started)
+	}
+	if model.Model != "" {
+		params["model"] = model.Model
+		if model.DefaultReasoningEffort != "" {
+			params["effort"] = model.DefaultReasoningEffort
+		}
+	}
+	err = client.call(start, "turn/start", params, &started)
 	stop()
 	if err != nil {
 		var rpc *rpcError
@@ -376,5 +389,5 @@ func completedTurn(turn codexTurn) delivery {
 	if turn.Error != nil && turn.Error.Message != "" {
 		detail = fmt.Sprintf("%s %s", detail, turn.Error.Message)
 	}
-	return delivery{state: "failed", detail: detail, turnID: turn.ID}
+	return delivery{state: "failed", detail: turnDetail(turn.ID, detail), turnID: turn.ID}
 }

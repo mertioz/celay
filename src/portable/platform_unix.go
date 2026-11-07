@@ -24,7 +24,21 @@ func lockFile(file *os.File) (bool, error) {
 
 func hideConsole(_ *exec.Cmd) {}
 
-func packagedCodex(_ context.Context) string { return "" }
+func packagedCodex(_ context.Context) string {
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+	if path := "/Applications/Codex.app/Contents/Resources/codex"; isCodexExecutable(path) {
+		return path
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		path := filepath.Join(home, "Applications", "Codex.app", "Contents", "Resources", "codex")
+		if isCodexExecutable(path) {
+			return path
+		}
+	}
+	return ""
+}
 
 func downloadsFolder() (string, error) {
 	if runtime.GOOS == "linux" {

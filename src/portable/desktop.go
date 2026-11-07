@@ -388,7 +388,7 @@ func (ui *desktopUI) previewJob() {
 	prompt.Wrapping = fyne.TextWrapWord
 	preview := container.NewVScroll(prompt)
 	preview.SetMinSize(fyne.NewSize(400, 120))
-	details := widget.NewLabel(job.Detail)
+	details := widget.NewLabel(turnDetail(job.TurnID, job.Detail))
 	details.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(shortLabel(job.Title),
 		shortLabel(job.Due.Local().Format("02/01/2006 à 15:04")+" · "+jobStatus(job)))
