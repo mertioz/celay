@@ -7,6 +7,9 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -22,3 +25,18 @@ func lockFile(file *os.File) (bool, error) {
 func hideConsole(_ *exec.Cmd) {}
 
 func packagedCodex(_ context.Context) string { return "" }
+
+func downloadsFolder() (string, error) {
+	if runtime.GOOS == "linux" {
+		if output, err := exec.Command("xdg-user-dir", "DOWNLOAD").Output(); err == nil {
+			if folder := strings.TrimSpace(string(output)); filepath.IsAbs(folder) {
+				return folder, nil
+			}
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Downloads"), nil
+}

@@ -1,0 +1,86 @@
+name: Desktop builds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, arch: amd64, runner: ubuntu-22.04, compiler: x86_64 }
+          - { os: windows, arch: arm64, runner: ubuntu-22.04, compiler: aarch64 }
+          - { os: darwin, arch: amd64, runner: macos-15-intel }
+          - { os: darwin, arch: arm64, runner: macos-15 }
+          - { os: linux, arch: amd64, runner: ubuntu-22.04, appimage: x86_64, checksum: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 }
+          - { os: linux, arch: arm64, runner: ubuntu-22.04-arm, appimage: aarch64, checksum: f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: src/portable/go.sum
+      - name: Set up the Windows cross-compiler
+        if: matrix.os == 'windows'
+        env:
+          COMPILER: ${{ matrix.compiler }}
+        run: |
+          asset=llvm-mingw-20261104-ucrt-ubuntu-22.04-x86_64
+          curl --fail --location --retry 3 -o "$RUNNER_TEMP/$asset.tar.xz" "https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/$asset.tar.xz"
+          printf '919380403de87dca3c581c2053230cd298af5e891286628ba0613b7fed370926  %s\n' "$RUNNER_TEMP/$asset.tar.xz" | sha256sum --check
+          tar -xf "$RUNNER_TEMP/$asset.tar.xz" -C "$RUNNER_TEMP"
+          echo "CC=$RUNNER_TEMP/$asset/bin/$COMPILER-w64-mingw32-clang" >> "$GITHUB_ENV"
+      - name: Install Linux graphics headers and AppImage tooling
+        if: matrix.os == 'linux'
+        env:
+          APPIMAGE_ARCH: ${{ matrix.appimage }}
+          CHECKSUM: ${{ matrix.checksum }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev xorg-dev libxkbcommon-dev xvfb xdotool xauth
+          tool="$RUNNER_TEMP/appimagetool.AppImage"
+          curl --fail --location --retry 3 -o "$tool" "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$APPIMAGE_ARCH.AppImage"
+          printf '%s  %s\n' "$CHECKSUM" "$tool" | sha256sum --check
+          chmod +x "$tool"
+      - name: Run desktop and scheduler tests
+        if: matrix.os == 'linux' && matrix.arch == 'amd64'
+        working-directory: src/portable
+        run: go test -tags ci ./...
+      - name: Build the desktop app
+        env:
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+        shell: bash
+        run: |
+          args=()
+          if [ "$TARGET_OS" = linux ]; then
+            args=(--appimage-tool "$RUNNER_TEMP/appimagetool.AppImage")
+          fi
+          python3 build.py --target "$TARGET_OS" "$TARGET_ARCH" --build-only --binaries artifacts "${args[@]}"
+      - name: Check the Linux launcher opens a desktop window
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          export CELAY_DATA_DIR="$RUNNER_TEMP/celay-smoke"
+          export CODEX_HOME="$RUNNER_TEMP/no-codex-history"
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          chmod +x artifacts/*.AppImage
+          timeout 25s xvfb-run -a sh -c '
+            "$1" &
+            app=$!
+            trap "kill $app 2>/dev/null || true" EXIT
+            xdotool search --sync --onlyvisible --name "^Celay$"
+          ' sh "$(realpath artifacts/*.AppImage)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: celay-${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/*
+          if-no-files-found: error

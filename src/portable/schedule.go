@@ -61,12 +61,13 @@ func (q *queue) add(ctx context.Context, thread discussion, prompt string, due t
 	return err
 }
 
-func (q *queue) cancel(ctx context.Context, id string) (bool, error) {
-	result, err := q.db.ExecContext(ctx, "DELETE FROM jobs WHERE id = ? AND state = 'queued'", id)
+func (q *queue) remove(ctx context.Context, id string) (bool, error) {
+	result, err := q.db.ExecContext(ctx, "DELETE FROM jobs WHERE id = ? AND state <> 'sending'", id)
 	if err != nil {
 		return false, err
 	}
 	rows, err := result.RowsAffected()
+	q.signal()
 	return rows != 0, err
 }
 
