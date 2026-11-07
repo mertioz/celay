@@ -2,53 +2,122 @@
 <html lang="fr">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Codex Markdown</title>
+<title>Celay</title>
 <style>
   * { box-sizing: border-box }
-  body { margin: 0; background: #f6f7f9; color: #18202b; font: 16px/1.45 system-ui, sans-serif }
-  main { max-width: 780px; margin: 0 auto; padding: 40px 22px }
-  header { display: flex; justify-content: space-between; align-items: start; gap: 16px }
-  h1 { margin: 0; font-size: 28px; letter-spacing: -.035em }
-  p { color: #4f5b6b; margin: .5rem 0 1rem }
-  button, input { font: inherit; color: inherit; border: 1px solid #c6cdd6; border-radius: 7px; background: white }
-  button { padding: 6px 12px; cursor: pointer }
-  input { display: block; width: 100%; padding: 9px 12px }
+  body { margin: 0; background: #f5f7fb; color: #182337; font: 15px/1.45 system-ui, sans-serif }
+  main { max-width: 1050px; margin: 0 auto; padding: 35px 22px 70px }
+  h1, h2, p { margin: 0 }
+  h1 { font-size: 38px; line-height: 1.1; letter-spacing: -.06em }
+  h2 { font-size: 18px; letter-spacing: -.025em }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 24px }
+  header p, .muted { color: #4f5d72 }
+  header p { margin-top: 5px }
+  .panels { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start }
+  .panel, dialog { border: 1px solid #d4ddea; border-radius: 11px; background: #fff }
+  .panel { min-width: 0; overflow: hidden }
+  .panel-heading { padding: 14px 15px }
+  .panel-heading p { margin-top: 4px }
+  input, textarea, button, .action { font: inherit; color: inherit; border: 1px solid #bac7db; border-radius: 7px; background: #fff }
+  input, textarea { display: block; width: 100%; padding: 8px 10px }
+  input[type=search] { margin-top: 11px }
+  textarea { resize: vertical; min-height: 110px }
+  button, .action { display: inline-flex; align-items: center; padding: 6px 10px; cursor: pointer; text-decoration: none }
+  button:hover, .action:hover { background: #edf2ff }
+  button:disabled { opacity: .56; cursor: default }
+  button.primary { border-color: #294bb7; background: #3458ce; color: #fff }
+  button.primary:hover:not(:disabled) { background: #2949b4 }
   :focus-visible { outline: 2px solid #3158d4; outline-offset: 2px }
-  #count { margin: 9px 0 6px; font-size: .84rem }
-  ul { list-style: none; margin: 0; padding: 0; border: 1px solid #c6cdd6; border-radius: 8px; background: white }
-  li + li { border-top: 1px solid #e8ebf0 }
-  li a { padding: 11px 13px; text-decoration: none; color: inherit; display: flex; gap: 12px; align-items: center }
-  li a:hover { background: #edf2ff }
-  li a:focus-visible { outline-offset: -2px }
-  .title { flex: 1; min-width: 0; overflow-wrap: anywhere }
-  small { color: #596575 }
-  .error { padding: 14px; background: #fff; border: 1px solid #c6cdd6; border-radius: 8px }
+  summary:focus-visible { outline-offset: -3px }
+  #count { margin-top: 6px; font-size: .85rem }
+  .discussions, #jobs { list-style: none; padding: 0; margin: 0 }
+  .discussions li, #jobs li { border-top: 1px solid #e5eaf2 }
+  summary { padding: 11px 14px; cursor: pointer; overflow-wrap: anywhere }
+  summary:hover, details[open] > summary { background: #f0f4fd }
+  .buttons { display: flex; flex-wrap: wrap; gap: 7px; padding: 9px 14px 12px }
+  small { color: #52627a }
+  .archived { margin-left: 7px; white-space: nowrap }
+  #jobs li { padding: 11px 14px; overflow-wrap: anywhere }
+  .job-title { display: block; font-weight: 600 }
+  .job-meta { margin: 4px 0; display: flex; gap: 7px; flex-wrap: wrap; align-items: center }
+  .badge { border-radius: 12px; color: #243e98; background: #edf1ff; padding: 1px 7px }
+  .badge.sent { color: #176040; background: #e5f5eb }
+  .badge.failed, .badge.uncertain { color: #8d320e; background: #fff0df }
+  .message { color: #404e63; white-space: pre-wrap; margin-top: 4px }
+  .error { color: #a12726 }
+  #jobs button { margin-top: 6px }
+  #job-note { margin-top: 6px }
+  dialog { color: inherit; padding: 17px; width: min(490px, calc(100vw - 30px)); box-shadow: 0 18px 65px #15244942 }
+  dialog::backdrop { background: #17253e5e }
+  dialog label { display: block; margin-top: 12px; font-weight: 600 }
+  dialog input, dialog textarea { margin-top: 5px }
+  dialog .buttons { padding: 12px 0 0 }
+  dialog .muted { margin-top: 4px; overflow-wrap: anywhere }
+  #form-status, #quit-status { margin-top: 6px }
+  @media (max-width: 730px) { .panels { grid-template-columns: minmax(0, 1fr) } main { padding: 22px 13px 50px } }
 </style>
 <main>
   <header>
-    <h1>Discussions Codex</h1>
-    <form method="post" action="close"><button type="submit">Fermer</button></form>
+    <div><h1>Celay</h1><p>Télécharge tes discussions Codex ou programme un message.</p></div>
+    <button type="button" id="quit">Quitter</button>
   </header>
-  <p>Cliquez sur un titre pour télécharger la discussion en Markdown.</p>
-  {{if .Error}}
-    <p class="error" role="alert">{{.Error}}</p>
-  {{else if .Discussions}}
-    <input type="search" id="filter" placeholder="Filtrer par titre…" aria-label="Filtrer par titre">
-    <p id="count" aria-live="polite"></p>
-    <ul id="titles">
-      {{range .Discussions}}
-        <li><a href="export/{{.ID}}" download><span class="title">{{.Title}}</span>{{if .Archived}}<small>Archivée</small>{{end}}</a></li>
+  <p id="quit-status" class="error" role="status" hidden></p>
+  <div class="panels">
+    <section class="panel" aria-labelledby="discussions-heading">
+      <div class="panel-heading">
+        <h2 id="discussions-heading">Discussions Codex</h2>
+        {{if .Error}}<p class="error" role="alert">{{.Error}}</p>
+        {{else if .Discussions}}
+        <input type="search" id="filter" placeholder="Filtrer par titre…" aria-label="Filtrer par titre">
+        <p id="count" class="muted" aria-live="polite"></p>
+        {{else}}<p>Aucune discussion enregistrée.</p>{{end}}
+      </div>
+      {{if .Discussions}}
+      <ul id="titles" class="discussions">
+        {{range .Discussions}}
+        <li>
+          <details name="discussion">
+            <summary><span class="title">{{.Title}}</span>{{if .Archived}}<small class="archived">Archivée</small>{{end}}</summary>
+            <div class="buttons">
+              <a class="action" href="export/{{.ID}}" download>Télécharger</a>
+              <button type="button" class="compose" data-id="{{.ID}}" data-archived="{{.Archived}}">Envoyer un message</button>
+            </div>
+          </details>
+        </li>
+        {{end}}
+      </ul>
       {{end}}
-    </ul>
-  {{else}}
-    <p>Aucune discussion enregistrée.</p>
-  {{end}}
+    </section>
+    <section class="panel" aria-labelledby="jobs-heading">
+      <div class="panel-heading">
+        <h2 id="jobs-heading">Envois programmés</h2>
+        <p class="muted">Tu peux fermer cet onglet. Laisse Celay en marche et l’ordinateur éveillé pour respecter l’heure choisie.</p>
+        <p id="job-note" role="status">Chargement…</p>
+      </div>
+      <ul id="jobs"></ul>
+    </section>
+  </div>
 </main>
+<dialog id="composer" aria-labelledby="composer-heading">
+  <h2 id="composer-heading">Envoyer un message</h2>
+  <p class="muted" id="thread-name"></p>
+  <form id="schedule">
+    <label for="prompt">Message</label>
+    <textarea id="prompt" required placeholder="Écris ton prompt…" maxlength="60000"></textarea>
+    <label for="when">Date et heure locales</label>
+    <input id="when" type="datetime-local" required>
+    <div class="buttons">
+      <button class="primary" id="save" type="submit">Programmer l’envoi</button>
+      <button id="dismiss" type="button">Fermer</button>
+    </div>
+    <p id="form-status" role="status"></p>
+  </form>
+</dialog>
 <script>
-  const filter = document.querySelector('#filter');
+  const byId = id => document.getElementById(id);
+  const filter = byId('filter');
   if (filter) {
-    const list = document.querySelector('#titles');
-    const count = document.querySelector('#count');
+    const list = byId('titles');
     const normalize = text => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr');
     const rows = Array.from(list.children, element => ({
       element, title: normalize(element.querySelector('.title').textContent),
@@ -60,12 +129,127 @@
         element.hidden = !title.includes(query);
         if (!element.hidden) matches++;
       }
-      list.hidden = matches === 0;
-      count.textContent = matches ? matches + (matches === 1 ? ' discussion' : ' discussions') : 'Aucun titre trouvé.';
+      byId('count').textContent = matches ? matches + (matches === 1 ? ' discussion' : ' discussions') : 'Aucun titre trouvé.';
     };
     filter.addEventListener('input', update);
     update();
   }
-  setInterval(() => fetch('alive', {method: 'POST'}).catch(() => {}), 30000);
+
+  const composer = byId('composer');
+  const prompt = byId('prompt');
+  const when = byId('when');
+  const save = byId('save');
+  const formStatus = byId('form-status');
+  let threadID;
+  const localInput = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  document.querySelectorAll('.compose').forEach(button => button.addEventListener('click', () => {
+    threadID = button.dataset.id;
+    byId('thread-name').textContent = button.closest('details').querySelector('.title').textContent;
+    prompt.value = '';
+    when.min = localInput(new Date(Math.ceil((Date.now() + 1000) / 60000) * 60000));
+    when.value = when.min;
+    const archived = button.dataset.archived === 'true';
+    save.disabled = prompt.disabled = when.disabled = archived;
+    formStatus.className = archived ? 'error' : '';
+    formStatus.textContent = archived ? 'Désarchive cette discussion dans Codex avant de programmer un envoi.' : '';
+    composer.showModal();
+  }));
+  byId('dismiss').addEventListener('click', () => composer.close());
+
+  byId('schedule').addEventListener('submit', async event => {
+    event.preventDefault();
+    const date = new Date(when.value);
+    if (!Number.isFinite(date.getTime()) || localInput(date) !== when.value || date.getTime() <= Date.now()) {
+      formStatus.className = 'error';
+      formStatus.textContent = 'Choisis une date et une heure locales à venir.';
+      return;
+    }
+    save.disabled = true;
+    formStatus.className = '';
+    formStatus.textContent = 'Enregistrement…';
+    try {
+      const response = await fetch('jobs', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({threadID, prompt: prompt.value, due: date.toISOString()})});
+      if (!response.ok) throw new Error((await response.text()).trim());
+      formStatus.textContent = 'Message programmé. Tu peux en ajouter un autre.';
+      prompt.value = '';
+      prompt.focus();
+      refreshJobs();
+    } catch (error) {
+      formStatus.className = 'error';
+      formStatus.textContent = error.message || 'Impossible de programmer le message.';
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  const dateFormat = new Intl.DateTimeFormat('fr-FR', {dateStyle: 'medium', timeStyle: 'short'});
+  const stateLabels = {queued: 'Programmé', sending: 'En cours', sent: 'Envoyé', failed: 'Échec', uncertain: 'À vérifier'};
+  const node = (tag, text, className) => {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    if (className) element.className = className;
+    return element;
+  };
+  let lastJobs = '';
+  async function refreshJobs() {
+    try {
+      const response = await fetch('jobs');
+      if (!response.ok) throw new Error();
+      const json = await response.text();
+      if (json === lastJobs) return;
+      lastJobs = json;
+      const jobs = JSON.parse(json);
+      byId('job-note').className = 'muted';
+      byId('job-note').textContent = jobs.length ? '' : 'Aucun envoi programmé.';
+      byId('jobs').replaceChildren(...jobs.map(job => {
+        const row = node('li', '');
+        const meta = node('div', '', 'job-meta');
+        meta.append(node('small', dateFormat.format(new Date(job.Due))),
+          node('small', stateLabels[job.State] || job.State, 'badge ' + job.State));
+        row.append(node('strong', job.Title, 'job-title'), meta);
+        const preview = node('details', '');
+        preview.append(node('summary', 'Voir le message'), node('p', job.Prompt, 'message'));
+        row.append(preview);
+        if (job.Detail) row.append(node('p', job.Detail, 'message'));
+        if (job.State === 'queued') {
+          const cancel = node('button', 'Annuler');
+          cancel.type = 'button';
+          cancel.addEventListener('click', async () => {
+            cancel.disabled = true;
+            try {
+              const result = await fetch('jobs/' + encodeURIComponent(job.ID), {method: 'DELETE'});
+              if (!result.ok) throw new Error((await result.text()).trim());
+              refreshJobs();
+            } catch (error) {
+              byId('job-note').className = 'error';
+              byId('job-note').textContent = error.message;
+              cancel.disabled = false;
+            }
+          });
+          row.append(cancel);
+        }
+        return row;
+      }));
+    } catch {
+      lastJobs = '';
+      byId('job-note').className = 'error';
+      byId('job-note').textContent = 'Impossible de lire la file d’envoi.';
+    }
+  }
+  refreshJobs();
+  const polling = setInterval(refreshJobs, 3000);
+  byId('quit').addEventListener('click', async () => {
+    const status = byId('quit-status');
+    try {
+      const result = await fetch('close', {method: 'POST'});
+      if (!result.ok) throw new Error((await result.text()).trim());
+      clearInterval(polling);
+      document.querySelector('main').replaceChildren(node('p', 'Celay est fermé. Tu peux fermer cet onglet.'));
+    } catch (error) {
+      status.hidden = false;
+      status.textContent = error.message;
+    }
+  });
 </script>
 </html>

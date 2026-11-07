@@ -142,6 +142,19 @@ func listDiscussions(ctx context.Context, root string) ([]discussion, error) {
 	return items, rows.Err()
 }
 
+func findDiscussion(ctx context.Context, root, id string) (discussion, error) {
+	items, err := listDiscussions(ctx, root)
+	if err != nil {
+		return discussion{}, err
+	}
+	for _, item := range items {
+		if item.ID == id {
+			return item, nil
+		}
+	}
+	return discussion{}, sql.ErrNoRows
+}
+
 type contentPart struct {
 	Type string
 	Text string
