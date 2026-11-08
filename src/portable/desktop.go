@@ -254,6 +254,9 @@ func (ui *desktopUI) compose() {
 	next := time.Now().Add(time.Minute).Truncate(time.Minute)
 	date.SetDate(&next)
 	hour.SetText(next.Format("15:04"))
+	picker := newModelPicker()
+	catalogStatus := widget.NewLabel("Chargement du catalogue Codex…")
+	catalogStatus.Wrapping = fyne.TextWrapWord
 	status := widget.NewLabel("")
 	status.Wrapping = fyne.TextWrapWord
 	submit := widget.NewButton("Programmer l’envoi", nil)
@@ -269,6 +272,7 @@ func (ui *desktopUI) compose() {
 			return
 		}
 		message := prompt.Text
+		options := picker.selection()
 		submit.Disable()
 		status.SetText("Enregistrement…")
 		go func() {
@@ -277,7 +281,7 @@ func (ui *desktopUI) compose() {
 			_, err := locateCodex(ctx)
 			if err == nil {
 				if due.After(time.Now()) {
-					err = ui.queue.add(ctx, thread, message, due)
+					err = ui.queue.add(ctx, thread, message, due, options)
 				} else {
 					err = errors.New("Choisis une heure à venir.")
 				}
@@ -302,13 +306,39 @@ func (ui *desktopUI) compose() {
 	inputs := container.NewGridWithColumns(2,
 		container.NewVBox(shortLabel("Date"), date),
 		container.NewVBox(shortLabel("Heure locale · HH:MM"), hour))
+	selectors := container.NewGridWithColumns(2,
+		container.NewVBox(shortLabel("Modèle"), picker.model),
+		container.NewVBox(shortLabel("Raisonnement"), picker.effort))
 	title := shortLabel(thread.Title)
 	title.TextStyle.Bold = true
-	content := container.NewVBox(title, widget.NewLabel("Message"), prompt, inputs, status, submit)
+	content := container.NewVBox(title, widget.NewLabel("Message"), prompt, inputs, selectors, catalogStatus, status, submit)
 	form := dialog.NewCustom("Envoyer un message", "Fermer", content, ui.window)
-	form.Resize(fyne.NewSize(500, 385))
+	catalogCtx, closeCatalog := context.WithCancel(ui.ctx)
+	form.SetOnClosed(closeCatalog)
+	form.Resize(fyne.NewSize(540, 475))
 	form.Show()
 	ui.window.Canvas().Focus(prompt)
+	go func() {
+		ctx, cancel := context.WithTimeout(catalogCtx, 15*time.Second)
+		defer cancel()
+		models, err := loadModelCatalog(ctx)
+		if catalogCtx.Err() != nil {
+			return
+		}
+		fyne.Do(func() {
+			if catalogCtx.Err() != nil {
+				return
+			}
+			if err != nil {
+				catalogStatus.SetText("Choix du modèle indisponible. " + err.Error())
+			} else if len(models) == 0 {
+				catalogStatus.SetText("Codex ne propose aucun modèle de texte dans son catalogue.")
+			} else {
+				picker.setCatalog(models)
+				catalogStatus.Hide()
+			}
+		})
+	}()
 }
 
 func scheduleTime(day *time.Time, hour string) (time.Time, error) {
@@ -392,6 +422,13 @@ func (ui *desktopUI) previewJob() {
 	details.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(shortLabel(job.Title),
 		shortLabel(job.Due.Local().Format("02/01/2006 à 15:04")+" · "+jobStatus(job)))
+	if job.Options.Model != "" {
+		effort := defaultEffortLabel
+		if job.Options.Effort != "" {
+			effort = effortLabel(job.Options.Effort)
+		}
+		header.Add(shortLabel(job.Options.Model + " · Raisonnement " + effort))
+	}
 	if job.Detail != "" {
 		header.Add(details)
 	}

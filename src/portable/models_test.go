@@ -75,3 +75,34 @@ func TestUnsupportedModelDetailKeepsDeliveryDistinction(t *testing.T) {
 		t.Fatal("without a turn ID the UI must not claim that the prompt is in the discussion")
 	}
 }
+
+func TestResolveExplicitTurnOptions(t *testing.T) {
+	const catalog = `{"data":[
+		{"model":"chosen","defaultReasoningEffort":"medium",
+		 "supportedReasoningEfforts":[{"reasoningEffort":"medium"},{"reasoningEffort":"high"}]},
+		{"model":"fallback","isDefault":true,"defaultReasoningEffort":"low"}]}`
+	for _, tc := range []struct {
+		name        string
+		selected    turnOptions
+		expected    turnOptions
+		unavailable bool
+	}{
+		{name: "explicit settings", selected: turnOptions{"chosen", "high"}, expected: turnOptions{"chosen", "high"}},
+		{name: "model default", selected: turnOptions{"chosen", ""}, expected: turnOptions{"chosen", "medium"}},
+		{name: "removed effort", selected: turnOptions{"chosen", "max"}, unavailable: true},
+		{name: "removed model", selected: turnOptions{"missing", "high"}, unavailable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call := func(_ context.Context, method string, _, result any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected RPC method %q", method)
+				}
+				return json.Unmarshal([]byte(catalog), result)
+			}
+			got, err := resolveTurnOptions(context.Background(), call, "openai", "fallback", tc.selected)
+			if got != tc.expected || (err != nil) != tc.unavailable {
+				t.Fatalf("got options %+v and error %v", got, err)
+			}
+		})
+	}
+}

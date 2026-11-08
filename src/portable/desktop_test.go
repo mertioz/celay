@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ func TestScheduledDeletion(t *testing.T) {
 	defer queue.db.Close()
 	thread := discussion{ID: "test-thread", Title: "Discussion"}
 	now := time.Now()
-	if err := queue.add(ctx, thread, "remove this message", now); err != nil {
+	if err := queue.add(ctx, thread, "remove this message", now, turnOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	jobs, err := queue.list(ctx)
@@ -35,7 +36,7 @@ func TestScheduledDeletion(t *testing.T) {
 		t.Fatalf("deleted message was available for dispatch: %v", err)
 	}
 
-	if err := queue.add(ctx, thread, "keep the active send", now); err != nil {
+	if err := queue.add(ctx, thread, "keep the active send", now, turnOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	sending, err := queue.claim(ctx, now)
@@ -73,6 +74,41 @@ func TestDesktopSelectionShowsActions(t *testing.T) {
 	ui.jobList.Select(1)
 	if !ui.deleteButton.Disabled() {
 		t.Fatal("deletion must be disabled once a send is in progress")
+	}
+}
+
+func TestModelPickerFiltersAndResetsReasoningEffort(t *testing.T) {
+	application := test.NewApp()
+	defer application.Quit()
+	picker := newModelPicker()
+	var models []catalogModel
+	if err := json.Unmarshal([]byte(`[
+		{"model":"one","displayName":"Model One","supportedReasoningEfforts":[{"reasoningEffort":"high"}]},
+		{"model":"two","supportedReasoningEfforts":[{"reasoningEffort":"low"}]}
+	]`), &models); err != nil {
+		t.Fatal(err)
+	}
+	picker.setCatalog(models)
+	if picker.selection() != (turnOptions{}) || !picker.effort.Disabled() {
+		t.Fatal("the discussion settings must be the initial choice")
+	}
+	picker.model.SetSelected("Model One · one")
+	picker.effort.SetSelected("Élevé")
+	if got := picker.selection(); got != (turnOptions{"one", "high"}) {
+		t.Fatalf("unexpected model and effort: %+v", got)
+	}
+	picker.model.SetSelected("two")
+	picker.effort.SetSelected("Élevé")
+	if got := picker.selection(); got != (turnOptions{"two", ""}) {
+		t.Fatalf("changing model must reset the effort: %+v", got)
+	}
+	picker.effort.SetSelected("Faible")
+	if got := picker.selection(); got != (turnOptions{"two", "low"}) {
+		t.Fatalf("the new model must offer its own effort: %+v", got)
+	}
+	picker.model.SetSelected(threadModelLabel)
+	if picker.selection() != (turnOptions{}) || !picker.effort.Disabled() {
+		t.Fatal("returning to the discussion settings must clear explicit choices")
 	}
 }
 

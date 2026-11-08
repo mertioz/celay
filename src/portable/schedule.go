@@ -13,6 +13,7 @@ import (
 type job struct {
 	ID, ThreadID, Title, Prompt, State, Detail, TurnID string
 	Due                                                time.Time
+	Options                                            turnOptions
 }
 
 type queue struct {
@@ -26,7 +27,20 @@ func openQueue(folder string) (*queue, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	_, err = db.Exec(`
+	if err := prepareQueue(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &queue{db: db, wake: make(chan struct{}, 1)}, nil
+}
+
+func prepareQueue(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`
 		CREATE TABLE IF NOT EXISTS jobs (
 			id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, title TEXT NOT NULL,
 			prompt TEXT NOT NULL, due INTEGER NOT NULL, next_attempt INTEGER NOT NULL,
@@ -40,10 +54,22 @@ func openQueue(folder string) (*queue, error) {
 			ELSE 'Codex a accepté le message. Vérifie sa réponse dans la discussion.' END
 		WHERE state = 'sending';`)
 	if err != nil {
-		db.Close()
-		return nil, err
+		return err
 	}
-	return &queue{db: db, wake: make(chan struct{}, 1)}, nil
+	var schemaVersion int
+	if err := tx.QueryRow("PRAGMA user_version").Scan(&schemaVersion); err != nil {
+		return err
+	}
+	if schemaVersion == 0 {
+		if _, err := tx.Exec(`
+			ALTER TABLE jobs ADD COLUMN model TEXT NOT NULL DEFAULT '';
+			ALTER TABLE jobs ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+			PRAGMA user_version = 1;
+		`); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (q *queue) signal() {
@@ -53,10 +79,11 @@ func (q *queue) signal() {
 	}
 }
 
-func (q *queue) add(ctx context.Context, thread discussion, prompt string, due time.Time) error {
+func (q *queue) add(ctx context.Context, thread discussion, prompt string, due time.Time, options turnOptions) error {
 	at := due.UnixMilli()
-	_, err := q.db.ExecContext(ctx, `INSERT INTO jobs(id, thread_id, title, prompt, due, next_attempt, created)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, rand.Text(), thread.ID, thread.Title, prompt, at, at, time.Now().UnixMilli())
+	_, err := q.db.ExecContext(ctx, `INSERT INTO jobs(id, thread_id, title, prompt, due, next_attempt, created, model, effort)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, rand.Text(), thread.ID, thread.Title, prompt, at, at, time.Now().UnixMilli(),
+		options.Model, options.Effort)
 	q.signal()
 	return err
 }
@@ -71,13 +98,13 @@ func (q *queue) remove(ctx context.Context, id string) (bool, error) {
 	return rows != 0, err
 }
 
-const jobColumns = "id, thread_id, title, prompt, state, detail, turn_id, due"
+const jobColumns = "id, thread_id, title, prompt, state, detail, turn_id, due, model, effort"
 
 func scanJob(row interface{ Scan(...any) error }) (job, error) {
 	var item job
 	var due int64
 	err := row.Scan(&item.ID, &item.ThreadID, &item.Title, &item.Prompt,
-		&item.State, &item.Detail, &item.TurnID, &due)
+		&item.State, &item.Detail, &item.TurnID, &due, &item.Options.Model, &item.Options.Effort)
 	item.Due = time.UnixMilli(due)
 	return item, err
 }

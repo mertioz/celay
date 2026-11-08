@@ -160,6 +160,35 @@ func (client *codexProcess) close() {
 	}
 }
 
+func (client *codexProcess) initialize(ctx context.Context) error {
+	var result json.RawMessage
+	if err := client.call(ctx, "initialize", map[string]any{
+		"clientInfo": map[string]string{"name": "celay", "title": "Celay", "version": version},
+	}, &result); err != nil {
+		return fmt.Errorf("Initialisation de Codex impossible. %w", err)
+	}
+	if err := client.writePacket(ctx, map[string]string{"method": "initialized"}); err != nil {
+		return errors.New("Connexion à Codex interrompue.")
+	}
+	return nil
+}
+
+func loadModelCatalog(ctx context.Context) ([]catalogModel, error) {
+	binary, err := locateCodex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	client, err := startCodex(ctx, binary)
+	if err != nil {
+		return nil, fmt.Errorf("Impossible de démarrer Codex. %w", err)
+	}
+	defer client.close()
+	if err := client.initialize(ctx); err != nil {
+		return nil, err
+	}
+	return listTextModels(ctx, client.call)
+}
+
 func (client *codexProcess) receive(ctx context.Context) (rpcPacket, error) {
 	for {
 		select {
@@ -279,15 +308,8 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 	}
 	defer client.close()
 
-	var result json.RawMessage
-	err = client.call(preflight, "initialize", map[string]any{
-		"clientInfo": map[string]string{"name": "celay", "title": "Celay", "version": version},
-	}, &result)
-	if err != nil {
-		return delivery{state: "failed", detail: "Initialisation de Codex impossible. " + err.Error()}
-	}
-	if err := client.writePacket(preflight, map[string]string{"method": "initialized"}); err != nil {
-		return delivery{state: "failed", detail: "Connexion à Codex interrompue."}
+	if err := client.initialize(preflight); err != nil {
+		return delivery{state: "failed", detail: err.Error()}
 	}
 	var resumed struct {
 		Model, ModelProvider string
@@ -314,7 +336,7 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 	if provider == "" {
 		provider = resumed.Thread.ModelProvider
 	}
-	model, err := resolveTurnModel(preflight, client.call, provider, resumed.Model)
+	options, err := resolveTurnOptions(preflight, client.call, provider, resumed.Model, item.Options)
 	if err != nil {
 		return delivery{state: "failed", detail: err.Error()}
 	}
@@ -325,11 +347,11 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 		"threadId": item.ThreadID,
 		"input":    []map[string]string{{"type": "text", "text": item.Prompt}},
 	}
-	if model.Model != "" {
-		params["model"] = model.Model
-		if model.DefaultReasoningEffort != "" {
-			params["effort"] = model.DefaultReasoningEffort
-		}
+	if options.Model != "" {
+		params["model"] = options.Model
+	}
+	if options.Effort != "" {
+		params["effort"] = options.Effort
 	}
 	err = client.call(start, "turn/start", params, &started)
 	stop()
