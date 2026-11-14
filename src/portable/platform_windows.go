@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
 )
 
@@ -24,6 +26,10 @@ func lockFile(file *os.File) (bool, error) {
 
 func hideConsole(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+}
+
+func dialDesktop(ctx context.Context, _ string) (net.Conn, error) {
+	return winio.DialPipeContext(ctx, `\\.\pipe\codex-ipc`)
 }
 
 func downloadsFolder() (string, error) {

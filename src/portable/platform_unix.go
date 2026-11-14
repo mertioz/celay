@@ -4,12 +4,16 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -23,6 +27,31 @@ func lockFile(file *os.File) (bool, error) {
 }
 
 func hideConsole(_ *exec.Cmd) {}
+
+func dialDesktop(ctx context.Context, root string) (net.Conn, error) {
+	paths := []string{
+		filepath.Join(root, "ipc", "ipc.sock"),
+		filepath.Join(os.TempDir(), "codex-ipc", fmt.Sprintf("ipc-%d.sock", os.Getuid())),
+	}
+	if real, err := filepath.EvalSymlinks(filepath.Join(root, "ipc")); err == nil {
+		hash := sha256.Sum256([]byte(real))
+		paths = append(paths, filepath.Join("/tmp", fmt.Sprintf("codex-ipc-%d", os.Getuid()), fmt.Sprintf("%x", hash), "ipc.sock"))
+	}
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode()&os.ModeSocket == 0 {
+			continue
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != uint32(os.Getuid()) {
+			continue
+		}
+		if conn, err := (&net.Dialer{}).DialContext(ctx, "unix", path); err == nil {
+			return conn, nil
+		}
+	}
+	return nil, errors.New("connexion locale Codex Desktop indisponible")
+}
 
 func packagedCodex(_ context.Context) string {
 	if runtime.GOOS != "darwin" {

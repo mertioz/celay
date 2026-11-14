@@ -79,6 +79,10 @@ func resolveTurnOptions(ctx context.Context, call rpcCall, provider, saved strin
 	if err != nil {
 		return turnOptions{}, err
 	}
+	return validateTurnOptions(models, selected)
+}
+
+func validateTurnOptions(models []catalogModel, selected turnOptions) (turnOptions, error) {
 	for _, model := range models {
 		if model.Model != selected.Model {
 			continue

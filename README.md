@@ -33,7 +33,7 @@ Pour envoyer, Celay utilise Codex installé et connecté sur ta machine. Il priv
 
 La croix masque la fenêtre quand il reste des envois. Pour la rouvrir, utilise l’icône de Celay dans la zone de notification ou relance le programme. Pour respecter l’heure choisie, garde l’ordinateur éveillé. Après un redémarrage ou après avoir choisi **Quitter**, relance Celay pour reprendre les envois en attente, y compris ceux dont l’heure est passée.
 
-Les messages d’une même discussion passent l’un après l’autre. Si un autre processus Codex garde la discussion occupée, Celay attend qu’elle soit libérée avant d’envoyer le message.
+Les messages d’une même discussion passent l’un après l’autre. Pour une discussion ouverte dans Codex Desktop, Celay adresse l’envoi au moteur qui la possède déjà. Si Codex est en train de répondre, Celay attend la fin de cette réponse. Si la discussion est retenue par une autre application sans coordination locale compatible, Celay indique qu’il faut la libérer dans cette application.
 
 ## Télécharger une discussion
 

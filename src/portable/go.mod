@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	fyne.io/fyne/v2 v2.8.2
+	github.com/Microsoft/go-winio v0.6.2
 	golang.org/x/sys v0.37.0
 	golang.org/x/text v0.22.0
 	modernc.org/sqlite v1.44.3

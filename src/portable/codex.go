@@ -285,7 +285,7 @@ func isBusy(err error) bool {
 }
 
 func busyDelivery() delivery {
-	return delivery{state: "retry", detail: "Discussion occupée. Celay réessaiera automatiquement."}
+	return delivery{state: "retry", detail: "Codex répond déjà dans cette discussion. L’envoi attend la fin de sa réponse."}
 }
 
 func sendToCodex(ctx context.Context, root string, item job, accepted func(string)) delivery {
@@ -297,6 +297,9 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 	}
 	if thread.Archived {
 		return delivery{state: "failed", detail: "Désarchive la discussion dans Codex pour pouvoir y envoyer un message."}
+	}
+	if result, handled := tryDesktopDelivery(ctx, root, item, accepted); handled {
+		return result
 	}
 	binary, err := locateCodex(preflight)
 	if err != nil {
@@ -322,7 +325,10 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 		map[string]any{"threadId": item.ThreadID, "excludeTurns": true}, &resumed)
 	if err != nil {
 		if isBusy(err) {
-			return busyDelivery()
+			if result, handled := tryDesktopDelivery(ctx, root, item, accepted); handled {
+				return result
+			}
+			return writerBusyDelivery()
 		}
 		return delivery{state: "failed", detail: "Impossible de reprendre la discussion. " + err.Error()}
 	}
@@ -343,16 +349,7 @@ func sendToCodex(ctx context.Context, root string, item job, accepted func(strin
 	cancel()
 	start, stop := context.WithTimeout(ctx, 60*time.Second)
 	var started struct{ Turn codexTurn }
-	params := map[string]any{
-		"threadId": item.ThreadID,
-		"input":    []map[string]string{{"type": "text", "text": item.Prompt}},
-	}
-	if options.Model != "" {
-		params["model"] = options.Model
-	}
-	if options.Effort != "" {
-		params["effort"] = options.Effort
-	}
+	params := turnStartParams(item, options)
 	err = client.call(start, "turn/start", params, &started)
 	stop()
 	if err != nil {
