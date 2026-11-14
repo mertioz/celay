@@ -14,7 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-const version = "2.2.1"
+const version = "2.2.2"
 
 //go:embed celay.svg
 var iconData []byte

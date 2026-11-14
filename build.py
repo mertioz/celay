@@ -61,8 +61,8 @@ def mac_archive(output, binary, license_file, notices):
         "CFBundleName": "Celay",
         "CFBundleDisplayName": "Celay",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "2.2.1",
-        "CFBundleVersion": "2.2.1",
+        "CFBundleShortVersionString": "2.2.2",
+        "CFBundleVersion": "2.2.2",
         "LSMinimumSystemVersion": "12.0",
         "NSHighResolutionCapable": True,
     })

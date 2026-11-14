@@ -13,6 +13,8 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Codex Desktop's local coordination protocol routes follower requests to
@@ -180,7 +182,7 @@ func (client *desktopClient) deliver(ctx context.Context, root string, item job,
 		}
 	}
 	params := turnStartParams(item, options)
-	params["clientUserMessageId"] = "celay-" + item.ID
+	params["clientUserMessageId"] = uuid.NewSHA1(uuid.NameSpaceURL, []byte("celay:"+item.ID)).String()
 	var response struct{ Result struct{ Turn codexTurn } }
 	err = client.call(preflight, "thread-follower-start-turn", 2, map[string]any{
 		"conversationId": item.ThreadID,
@@ -241,7 +243,11 @@ func (client *desktopClient) deliver(ctx context.Context, root string, item job,
 func turnStartParams(item job, options turnOptions) map[string]any {
 	params := map[string]any{
 		"threadId": item.ThreadID,
-		"input":    []map[string]string{{"type": "text", "text": item.Prompt}},
+		// Desktop renders this input optimistically before the server normalizes
+		// it. Its renderer requires text_elements to be an array, including when empty.
+		"input": []map[string]any{{
+			"type": "text", "text": item.Prompt, "text_elements": []any{},
+		}},
 	}
 	if options.Model != "" {
 		params["model"] = options.Model

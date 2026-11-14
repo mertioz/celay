@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func readDesktopTestPacket(conn net.Conn) (map[string]any, error) {
@@ -127,9 +129,17 @@ func TestDesktopDeliveryUsesExistingOwner(t *testing.T) {
 				start := params["turnStart"].(map[string]any)
 				request := start["request"].(map[string]any)
 				if params["conversationId"] != "target" || request["threadId"] != "target" ||
-					request["clientUserMessageId"] != "celay-scheduled" ||
 					start["context"].(map[string]any)["inheritThreadSettings"] != true {
 					t.Fatalf("unexpected routed request: %+v", packet)
+				}
+				messageID, validID := request["clientUserMessageId"].(string)
+				if _, err := uuid.Parse(messageID); err != nil || !validID {
+					t.Fatalf("Desktop messages require a UUID client identifier: %+v", request)
+				}
+				input := request["input"].([]any)[0].(map[string]any)
+				elements, valid := input["text_elements"].([]any)
+				if !valid || len(elements) != 0 || input["text"] != "Only once" {
+					t.Fatalf("Desktop text inputs require the renderer's metadata array: %+v", input)
 				}
 				if _, set := request["model"]; set {
 					t.Fatal("default delivery must inherit the owner's model")
@@ -155,6 +165,20 @@ func TestTurnStartParamsPreserveSelectedModelAndReasoning(t *testing.T) {
 	params := turnStartParams(job{ThreadID: "target", Prompt: "Message"}, turnOptions{Model: "selected", Effort: "high"})
 	if params["model"] != "selected" || params["effort"] != "high" || params["threadId"] != "target" {
 		t.Fatalf("selected options were lost: %+v", params)
+	}
+	// Mirror the renderer's metadata lookup across the serialized wire input.
+	wire, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Input []struct {
+			TextElements json.RawMessage `json:"text_elements"`
+		}
+	}
+	if err := json.Unmarshal(wire, &decoded); err != nil || len(decoded.Input) != 1 ||
+		string(decoded.Input[0].TextElements) != "[]" {
+		t.Fatalf("text metadata must survive JSON serialization as an empty array: %s, %v", wire, err)
 	}
 }
 

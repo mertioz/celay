@@ -64,7 +64,7 @@ def main():
     parser.add_argument("--makeappx", required=True, type=Path)
     parser.add_argument("--binaries", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--version", default="2.2.1.0")
+    parser.add_argument("--version", default="2.2.2.0")
     parser.add_argument("--go", default="go")
     args = parser.parse_args()
     project = Path(__file__).resolve().parents[1]
